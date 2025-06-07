@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sparkle Wash</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      background-image: url('../shalom/fuel.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      min-height: 100dvh;
+      background-color: rgba(5, 2, 131, 0.5);
+      z-index: 1;
+    }
+
+    .container {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    h2 {
+      font-size: 2em;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      font-size: clamp(1.5em, 7vw, 4em); /* Adjusted for smoother scaling */
+      color: #fff;
+      white-space: nowrap;
+      overflow: hidden;
+      border-right: 0 solid #fff;
+      animation: typing 3s steps(30, end), sparkle 5s infinite;
+    }
+
+    h3 {
+      font-size: clamp(1.2em, 4vw, 2em);
+      color: whitesmoke;
+      margin-top: 30px;
+      text-align: center;
+      padding: 0 20px;
+    }
+
+    .btn {
+      margin-top: 20px;
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      flex-wrap: wrap;
+      z-index: 3;
+    }
+
+    .btn button {
+      padding: 10px 20px;
+      font-size: 1em;
+      background-color: rgb(22, 192, 204);
+      color: #fff;
+      border: 2px solid #fff;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.5s, color 0.5s;
+    }
+
+    .btn button:hover {
+      background-color: blue;
+    }
+
+    /* Keyframes */
+    @keyframes typing {
+      from {
+        width: 0;
+      }
+      to {
+        width: 100%;
+      }
+    }
+
+    @keyframes sparkle {
+      0%, 100% {
+        text-shadow: 0 0 5px #fff, 0 0 10px #fff;
+      }
+      50% {
+        text-shadow: 0 0 20px #fff, 0 0 30px #00ffff;
+      }
+    }
+
+    /* Responsive Enhancements */
+    @media screen and (max-width: 480px) {
+      h2 {
+        font-size: 1.4em;
+      }
+
+      .btn {
+        gap: 10px;
+        flex-wrap: nowrap;
+      }
+
+      .btn button {
+        font-size: 0.9em;
+        padding: 8px 12px;
+      }
+
+      body {
+        background-size: 400%;
+        background-position: center top;
+      }
+    }
+
+    @media screen and (max-width: 360px) {
+      h2 {
+        font-size: 1.1em;
+      }
+
+      .btn {
+        gap: 8px;
+        flex-wrap: nowrap;
+      }
+
+      .btn button {
+        padding: 8px 10px;
+        font-size: 0.85em;
+      }
+
+      body {
+        background-size: 140%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Welcome to</h2>
+    <h1 id="sparkle-text"><b>SHALOM FILLING STATION</b></h1>
+    <h3>Clean fuel. Clear future!!</h3>
+
+    <div class="btn">
+      <button onclick="window.location.href = '../shalom/authpage/login_out.php';">Sign In</button>
+      <button onclick="window.location.href = '../shalom/authpage/login_out.php';">Sign Up</button>
+    </div>
+  </div>
+
+  <script>
+    setInterval(() => {
+      const textElement = document.getElementById('sparkle-text');
+      textElement.style.animation = 'none';
+      void textElement.offsetWidth;
+      textElement.style.animation = null;
+    }, 5000);
+  </script>
+</body>
+</html>
