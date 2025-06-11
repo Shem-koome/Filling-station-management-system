@@ -28,7 +28,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if ($stmt->execute()) {
         $_SESSION['email'] = $email;
         $_SESSION['success'] = "Account created successfully!";
-        header("Location: ../employee/dashboard.php");
+        header("Location: ../employee/header.php");
         exit();
     } else {
         $_SESSION['error'] = "Error creating account. Please try again.";
