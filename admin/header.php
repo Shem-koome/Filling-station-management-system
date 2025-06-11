@@ -58,6 +58,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
          <li class="<?= $currentPage == 'pump_management.php' ? 'active' : '' ?>">
             <a href="pump_management.php"><i class="fas fa-tachometer-alt"></i><span>Pump Management</span></a>
         </li>
+        <li class="<?= $currentPage == 'batch_history.php' ? 'active' : '' ?>">
+            <a href="batch_history.php"><i class="fas fa-history"></i><span>Batch History</span></a>
+        </li>
         <li class="<?= $currentPage == 'fuel_readings.php' ? 'active' : '' ?>">
             <a href="fuel_readings.php"><i class="fas fa-gas-pump"></i><span>Fuel Readings</span></a>
         </li>

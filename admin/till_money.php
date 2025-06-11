@@ -2,8 +2,8 @@
 <?php
 require '../authpage/db.php';
 
-// Fetch all till entries
-$result = $conn->query("SELECT user_email, amount, transaction_cost, total, entry_date FROM till_money ORDER BY entry_date DESC");
+// Fetch all till entries with pump and batch info
+$result = $conn->query("SELECT tm.user_email, tm.amount, tm.transaction_cost, tm.total, tm.entry_date, p.pump_number, fb.id as batch_id FROM till_money tm LEFT JOIN pumps p ON tm.pump_id = p.id LEFT JOIN fuel_batches fb ON tm.batch_id = fb.id ORDER BY tm.entry_date DESC");
 
 $till_entries = [];
 $total_sum = 0;
@@ -22,6 +22,8 @@ while ($row = $result->fetch_assoc()) {
         <thead style="background-color: #f2f2f2;">
             <tr>
                 <th>Employee Email</th>
+                <th>Pump</th>
+                <th>Batch ID</th>
                 <th>Amount Received (KES)</th>
                 <th>Transaction Cost (KES)</th>
                 <th>Total (KES)</th>
@@ -33,6 +35,8 @@ while ($row = $result->fetch_assoc()) {
                 <?php foreach ($till_entries as $entry): ?>
                     <tr>
                         <td><?php echo htmlspecialchars($entry['user_email']); ?></td>
+                        <td><?php echo htmlspecialchars($entry['pump_number'] ?? 'N/A'); ?></td>
+                        <td><?php echo $entry['batch_id'] ?? 'N/A'; ?></td>
                         <td style="text-align: right;"><?php echo number_format($entry['amount'], 2); ?></td>
                         <td style="text-align: right;"><?php echo number_format($entry['transaction_cost'], 2); ?></td>
                         <td style="text-align: right;"><?php echo number_format($entry['total'], 2); ?></td>
@@ -40,12 +44,12 @@ while ($row = $result->fetch_assoc()) {
                     </tr>
                 <?php endforeach; ?>
             <?php else: ?>
-                <tr><td colspan="5" style="text-align:center;">No till entries recorded yet.</td></tr>
+                <tr><td colspan="7" style="text-align:center;">No till entries recorded yet.</td></tr>
             <?php endif; ?>
         </tbody>
         <tfoot>
             <tr style="font-weight: bold; background-color: #dff0d8;">
-                <td colspan="3" style="text-align: right;">Grand Total:</td>
+                <td colspan="5" style="text-align: right;">Grand Total:</td>
                 <td style="text-align: right;">KES <?php echo number_format($total_sum, 2); ?></td>
                 <td></td>
             </tr>

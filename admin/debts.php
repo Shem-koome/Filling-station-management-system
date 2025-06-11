@@ -1,10 +1,16 @@
+<?php include 'header.php'; ?>
 <?php
-include 'header.php';
 require '../authpage/db.php';
 
-// Fetch debts
+// Fetch debts with batch and pump info
 $debts = [];
-$res = $conn->query("SELECT * FROM debts ORDER BY created_at DESC");
+$res = $conn->query("
+    SELECT d.*, fb.id AS batch_id, p.pump_number
+    FROM debts d
+    LEFT JOIN fuel_batches fb ON d.batch_id = fb.id
+    LEFT JOIN pumps p ON fb.pump_id = p.id
+    ORDER BY d.created_at DESC
+");
 while ($row = $res->fetch_assoc()) {
     $debts[] = $row;
 }
@@ -12,14 +18,14 @@ while ($row = $res->fetch_assoc()) {
 
 <style>
 .status-cleared {
-    background-color: #d4edda; /* light green */
-    color: #038120FF;          /* dark green */
+    background-color: #d4edda;
+    color: #038120FF;
     font-weight: bold;
     text-align: center;
 }
 .status-pending {
-    background-color: #fff3cd; /* light yellow */
-    color: #A7800EFF;          /* dark orange */
+    background-color: #fff3cd;
+    color: #A7800EFF;
     font-weight: bold;
     text-align: center;
 }
@@ -43,13 +49,15 @@ ul {
 </style>
 
 <div class="main-content">
-    <h2>All Debts (View Only)</h2>
+    <h2>All Debts (Admin View)</h2>
 
     <table>
         <thead>
             <tr>
                 <th>Debtor</th>
                 <th>Description</th>
+                <th>Pump</th>
+                <th>Batch ID</th>
                 <th>Total Debt (KES)</th>
                 <th>Remaining (KES)</th>
                 <th>Status</th>
@@ -58,16 +66,18 @@ ul {
         <tbody>
         <?php foreach ($debts as $debt): ?>
             <tr>
-                <td><?php echo htmlspecialchars($debt['debtor_name']); ?></td>
-                <td><?php echo htmlspecialchars($debt['description']); ?></td>
-                <td style="text-align: right;"><?php echo number_format($debt['total_amount'], 2); ?></td>
-                <td style="text-align: right;"><?php echo number_format($debt['remaining_amount'], 2); ?></td>
-                <td class="<?php echo $debt['status'] === 'cleared' ? 'status-cleared' : 'status-pending'; ?>">
-                    <?php echo ucfirst($debt['status']); ?>
+                <td><?= htmlspecialchars($debt['debtor_name']); ?></td>
+                <td><?= htmlspecialchars($debt['description']); ?></td>
+                <td><?= $debt['pump_number'] ?? 'N/A'; ?></td>
+                <td><?= $debt['batch_id'] ?? 'N/A'; ?></td>
+                <td style="text-align: right;"><?= number_format($debt['total_amount'], 2); ?></td>
+                <td style="text-align: right;"><?= number_format($debt['remaining_amount'], 2); ?></td>
+                <td class="<?= $debt['status'] === 'cleared' ? 'status-cleared' : 'status-pending'; ?>">
+                    <?= ucfirst($debt['status']); ?>
                 </td>
             </tr>
             <tr>
-                <td colspan="5" style="background-color: #fafafa;">
+                <td colspan="7" style="background-color: #fafafa;">
                     <strong>Payment History:</strong>
                     <ul>
                         <?php
@@ -79,8 +89,8 @@ ul {
                         if ($payments->num_rows > 0):
                             while ($p = $payments->fetch_assoc()): ?>
                                 <li>
-                                    Paid KES <?php echo number_format($p['paid_amount'], 2); ?> on <?php echo date('Y-m-d H:i', strtotime($p['payment_date'])); ?>
-                                    — Remaining KES <?php echo number_format($p['remaining_after_payment'], 2); ?>
+                                    Paid KES <?= number_format($p['paid_amount'], 2); ?> on <?= date('Y-m-d H:i', strtotime($p['payment_date'])); ?>
+                                    — Remaining KES <?= number_format($p['remaining_after_payment'], 2); ?>
                                 </li>
                             <?php endwhile;
                         else: ?>
