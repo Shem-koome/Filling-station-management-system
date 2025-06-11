@@ -273,6 +273,11 @@ body{
     }
 }
 
+input:invalid {
+    border-color: #e74c3c;
+}
+
+
 
 .alert-box {
     position: fixed;
