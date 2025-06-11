@@ -29,7 +29,11 @@ session_start(); // Must be at the very top
                 <span>or use your email for registration</span>
                 <input type="text" name="name" placeholder="Name" required>
                 <input type="email" name="email" placeholder="Email" required>
-                <input type="password" name="password" placeholder="Password" required>
+                <div class="input-wrapper">
+                <input type="password" name="password" placeholder="Password" class="password-field" required>
+                <i class="fa-solid fa-eye toggle-password"></i>
+                </div>
+                <input type="password" name="confirm_password" placeholder="Confirm Password" required>
                 <button type="submit">Sign Up</button>
             </form>
         </div>
@@ -46,7 +50,11 @@ session_start(); // Must be at the very top
                 </div>
                 <span>or use your email and password</span>
                 <input type="email" name="email" placeholder="Email" required>
-                <input type="password" name="password" placeholder="Password" required>
+                <div class="input-wrapper">
+                <input type="password" name="password" placeholder="Password" class="password-field" required>
+                <i class="fa-solid fa-eye toggle-password"></i>
+                </div>
+                <input type="password" name="confirm_password" placeholder="Confirm Password" required>
                 <a href="#">Forgot Your Password?</a>
                 <button type="submit">Sign In</button>
             </form>
