@@ -234,20 +234,23 @@ body{
 
 .input-wrapper {
     position: relative;
+    width: 100%;
 }
 
 .input-wrapper input {
     width: 100%;
-    padding-right: 35px; /* Space for the icon */
+    padding-right: 40px; /* space for the eye icon */
 }
 
-.input-wrapper .toggle-password {
+.toggle-password {
     position: absolute;
-    top: 50%;
     right: 10px;
+    top: 50%;
     transform: translateY(-50%);
     cursor: pointer;
-    color: #555;
+    color: #666;
+    transition: transform 0.3s ease, color 0.3s ease;
+    z-index: 10;
 }
 
 /* Animation when toggled */
