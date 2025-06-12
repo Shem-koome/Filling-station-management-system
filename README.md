@@ -103,10 +103,11 @@ Batch IDs link all transactional data.
 - PHP 7.4+
 - MySQL (phpMyAdmin)
 - Local server (XAMPP recommended)
-- 
+
 ---
 
 ## 🧑‍💻 Contributions
+
 Feel free to open issues or pull requests to improve this system. Forks are welcome!
 
 ---
