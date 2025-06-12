@@ -1,0 +1,29 @@
+# ============================
+# Enable Rewrite Engine
+RewriteEngine On
+RewriteBase /
+
+# ============================
+# Optional: Set default page
+DirectoryIndex authpage/login_out.php
+
+# ============================
+# Hide .php extension (only works for existing files)
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^(.+)$ $1.php [L]
+
+# ============================
+# Custom pretty URLs
+RewriteRule ^login$ authpage/login_out.php [L]
+RewriteRule ^register$ authpage/register.php [L]
+RewriteRule ^dashboard$ dashboard/index.php [L]
+RewriteRule ^employee-dashboard$ employee/dashboard.php [L]
+RewriteRule ^logout$ authpage/logout.php [L]
+
+# ============================
+# Optional: Add more rewrites
+RewriteRule ^cashdeposits$ employee/cash_deposits.php [L]
+RewriteRule ^fuelreadings$ employee/fuel_readings.php [L]
+RewriteRule ^pumpmanagement$ admin/pump_management.php [L]

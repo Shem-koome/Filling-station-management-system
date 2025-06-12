@@ -7,8 +7,70 @@ if (!isset($_SESSION['email'])) {
     exit();
 }
 
-// Logic remains the same (add pump, save readings, create batch, etc.)
-// ... (same PHP logic as before)
+// Handle Add Pump
+if (isset($_POST['add_pump'])) {
+    $pump_number = $_POST['pump_number'];
+    $fuel_type = $_POST['fuel_type'];
+    $stmt = $conn->prepare("INSERT INTO pumps (pump_number, fuel_type) VALUES (?, ?)");
+    $stmt->bind_param("ss", $pump_number, $fuel_type);
+    if ($stmt->execute()) {
+        $_SESSION['success'] = "Pump added successfully.";
+    } else {
+        $_SESSION['error'] = "Error adding pump.";
+    }
+    header("Location: pump_management.php");
+    exit();
+}
+
+// Handle Save Starting Readings
+if (isset($_POST['save_starting_readings'])) {
+    $pump_id = $_POST['pump_id'];
+    $date = $_POST['date'];
+    $morning_liters = $_POST['morning_liters'];
+    $morning_sales = $_POST['morning_sales'];
+    $user_email = $_SESSION['email'];
+
+    $stmt = $conn->prepare("INSERT INTO fuel_readings (pump_id, reading_date, morning_liters, morning_sales, user_email, updated_at) VALUES (?, ?, ?, ?, ?, NOW())");
+    $stmt->bind_param("issds", $pump_id, $date, $morning_liters, $morning_sales, $user_email);
+    if ($stmt->execute()) {
+        $_SESSION['success'] = "Starting readings saved.";
+    } else {
+        $_SESSION['error'] = "Error saving readings.";
+    }
+    header("Location: pump_management.php");
+    exit();
+}
+
+// Handle Create Batch and Insert Morning Readings
+if (isset($_POST['create_batch'])) {
+    $pump_id = $_POST['pump_id'];
+    $start_date = $_POST['start_date'];
+    $start_liters = $_POST['start_liters'];
+    $price_per_liter = $_POST['price_per_liter'];
+    $morning_liters = $_POST['batch_morning_liters'];
+    $morning_sales = $_POST['batch_morning_sales'];
+    $user_email = $_SESSION['email'];
+
+    $conn->begin_transaction();
+
+    try {
+        $stmt = $conn->prepare("INSERT INTO fuel_batches (pump_id, start_date, start_liters, remaining_liters, price_per_liter, is_closed) VALUES (?, ?, ?, ?, ?, 0)");
+        $stmt->bind_param("isddd", $pump_id, $start_date, $start_liters, $start_liters, $price_per_liter);
+        $stmt->execute();
+
+        $stmt = $conn->prepare("INSERT INTO fuel_readings (pump_id, reading_date, morning_liters, morning_sales, user_email, updated_at) VALUES (?, ?, ?, ?, ?, NOW())");
+        $stmt->bind_param("issds", $pump_id, $start_date, $morning_liters, $morning_sales, $user_email);
+        $stmt->execute();
+
+        $conn->commit();
+        $_SESSION['success'] = "Batch created and starting readings saved.";
+    } catch (Exception $e) {
+        $conn->rollback();
+        $_SESSION['error'] = "Error creating batch or saving readings.";
+    }
+    header("Location: pump_management.php");
+    exit();
+}
 
 // Fetch Pumps and Open Batches
 $pumps = $conn->query("SELECT * FROM pumps ORDER BY pump_number ASC")->fetch_all(MYSQLI_ASSOC);
@@ -25,14 +87,12 @@ $batches = $conn->query("SELECT fb.*, p.pump_number, p.fuel_type FROM fuel_batch
         padding: 20px;
         font-family: Arial, sans-serif;
     }
-
     .form-grid {
         display: flex;
         flex-wrap: wrap;
         gap: 20px;
         margin-bottom: 30px;
     }
-
     .form-box {
         flex: 1;
         min-width: 300px;
@@ -42,7 +102,6 @@ $batches = $conn->query("SELECT fb.*, p.pump_number, p.fuel_type FROM fuel_batch
         border-radius: 10px;
         box-shadow: 0 0 10px rgba(0,0,0,0.05);
     }
-
     .form-box h3 {
         margin-bottom: 15px;
         font-size: 18px;
@@ -51,19 +110,16 @@ $batches = $conn->query("SELECT fb.*, p.pump_number, p.fuel_type FROM fuel_batch
         gap: 10px;
         color: #333;
     }
-
     label {
         display: block;
         margin-top: 10px;
     }
-
     input, select {
         width: 100%;
         padding: 8px;
         margin-top: 5px;
         box-sizing: border-box;
     }
-
     button {
         margin-top: 15px;
         padding: 10px;
@@ -74,32 +130,26 @@ $batches = $conn->query("SELECT fb.*, p.pump_number, p.fuel_type FROM fuel_batch
         border-radius: 6px;
         cursor: pointer;
     }
-
     button:hover {
         background-color: #0056b3;
     }
-
     table {
         width: 100%;
         border-collapse: collapse;
         margin-top: 20px;
     }
-
     th, td {
         border: 1px solid #ccc;
         padding: 10px;
         text-align: center;
     }
-
     th {
         background-color: #f1f1f1;
     }
-
     .success {
         color: green;
         margin-bottom: 10px;
     }
-
     .error {
         color: red;
         margin-bottom: 10px;
@@ -135,30 +185,6 @@ $batches = $conn->query("SELECT fb.*, p.pump_number, p.fuel_type FROM fuel_batch
             </form>
         </div>
 
-        <!-- Starting Readings -->
-        <div class="form-box">
-            <h3><i class="fas fa-clock"></i> Starting Readings (Morning)</h3>
-            <form method="POST">
-                <label>Pump:</label>
-                <select name="pump_id" required>
-                    <?php foreach ($pumps as $pump): ?>
-                        <option value="<?= $pump['id'] ?>"><?= $pump['pump_number'] ?> (<?= $pump['fuel_type'] ?>)</option>
-                    <?php endforeach; ?>
-                </select>
-
-                <label>Date:</label>
-                <input type="date" name="date" value="<?= date('Y-m-d') ?>" required>
-
-                <label>Litres:</label>
-                <input type="number" step="0.01" name="morning_liters" required>
-
-                <label>Sales:</label>
-                <input type="number" step="0.01" name="morning_sales" required>
-
-                <button name="save_starting_readings"><i class="fas fa-save"></i> Save Readings</button>
-            </form>
-        </div>
-
         <!-- Create Batch -->
         <div class="form-box">
             <h3><i class="fas fa-box"></i> Create Fuel Batch</h3>
@@ -173,11 +199,17 @@ $batches = $conn->query("SELECT fb.*, p.pump_number, p.fuel_type FROM fuel_batch
                 <label>Start Date:</label>
                 <input type="date" name="start_date" value="<?= date('Y-m-d') ?>" required>
 
-                <label>Litres:</label>
+                <label>Litres (Batch):</label>
                 <input type="number" step="0.01" name="start_liters" required>
 
                 <label>Price/Litre:</label>
                 <input type="number" step="0.01" name="price_per_liter" required>
+
+                <label>Starting Litres (Morning Reading):</label>
+                <input type="number" step="0.01" name="batch_morning_liters" required>
+
+                <label>Starting Sales (Morning Reading):</label>
+                <input type="number" step="0.01" name="batch_morning_sales" required>
 
                 <button name="create_batch"><i class="fas fa-gas-pump"></i> Create Batch</button>
             </form>

@@ -1,99 +1,187 @@
-<?php include 'header.php'; ?>
 <?php
+include 'header.php';
 require '../authpage/db.php';
-session_start();
+if (!isset($_SESSION['email'])) {
+    header("Location: ../authpage/login.php");
+    exit();
+}
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $pump_id = $_POST['pump_id'];
-    $reading_date = $_POST['reading_date'];
-    $morning_liters = floatval($_POST['morning_liters']);
-    $evening_liters = floatval($_POST['evening_liters']);
-    $morning_sales = floatval($_POST['morning_sales']);
-    $evening_sales = floatval($_POST['evening_sales']);
-    $user_email = $_SESSION['user_email'];
+$user_email = $_SESSION['email'];
+$current_date = date('Y-m-d');
 
-    // Validation
-    if ($morning_liters < 0 || $evening_liters < 0 || $morning_sales < 0 || $evening_sales < 0) {
-        echo "<script>alert('Negative values are not allowed.');</script>";
-    } else {
-        // Insert reading
-        $stmt = $conn->prepare("INSERT INTO fuel_readings (pump_id, reading_date, morning_liters, evening_liters, morning_sales, evening_sales, user_email, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())");
-        $stmt->bind_param("issdddds", $pump_id, $reading_date, $morning_liters, $evening_liters, $morning_sales, $evening_sales, $user_email);
-        $stmt->execute();
+// Get open batch
+$batch_stmt = $conn->prepare("
+    SELECT fb.*, p.pump_number, p.fuel_type 
+    FROM fuel_batches fb 
+    JOIN pumps p ON fb.pump_id = p.id 
+    WHERE fb.is_closed = 0 AND fb.remaining_liters > 0 
+    ORDER BY fb.start_date ASC 
+    LIMIT 1
+");
+$batch_stmt->execute();
+$batch_result = $batch_stmt->get_result();
+$batch = $batch_result->fetch_assoc();
 
-        // Update remaining liters in batch
-        $liters_sold = $morning_liters - $evening_liters;
-        $update_batch = $conn->prepare("UPDATE fuel_batches SET remaining_liters = remaining_liters - ? WHERE pump_id = ? AND is_closed = 0");
-        $update_batch->bind_param("di", $liters_sold, $pump_id);
-        $update_batch->execute();
+if (!$batch) {
+    echo "<div style='padding:20px; color:red;'>No open fuel batch available.</div>";
+    include 'footer.php';
+    exit();
+}
 
-        // Auto-close batch if needed
-        $check_batch = $conn->prepare("SELECT id, remaining_liters, start_liters FROM fuel_batches WHERE pump_id = ? AND is_closed = 0");
-        $check_batch->bind_param("i", $pump_id);
-        $check_batch->execute();
-        $batch_result = $check_batch->get_result();
+// Auto-close batch if remaining_liters <= 0
+if ($batch['remaining_liters'] <= 0) {
+    $close_stmt = $conn->prepare("UPDATE fuel_batches SET is_closed = 1 WHERE id = ?");
+    $close_stmt->bind_param("i", $batch['id']);
+    $close_stmt->execute();
+    echo "<div style='padding:20px; color:red;'>Batch automatically closed. No remaining fuel.</div>";
+    include 'footer.php';
+    exit();
+}
 
-        if ($batch_row = $batch_result->fetch_assoc()) {
-            $remaining = $batch_row['remaining_liters'];
-            $start_liters = $batch_row['start_liters'];
-            $batch_id = $batch_row['id'];
+// Low fuel alert
+$low_threshold = 0.25 * $batch['start_liters'];
+$low_fuel_alert = ($batch['remaining_liters'] < $low_threshold);
 
-            if ($remaining <= 0) {
-                $conn->query("UPDATE fuel_batches SET is_closed = 1 WHERE id = $batch_id");
-                echo "<script>alert('Batch auto-closed: fuel depleted.');</script>";
-            } elseif ($remaining < 0.25 * $start_liters) {
-                echo "<script>alert('Warning: Fuel level below 25% for this batch!');</script>";
-            }
+$pump_id = $batch['pump_id'];
+$batch_start_date = $batch['start_date'];
+
+// Fetch today's reading if already exists
+$today_stmt = $conn->prepare("SELECT * FROM fuel_readings WHERE pump_id = ? AND reading_date = ?");
+$today_stmt->bind_param("is", $pump_id, $current_date);
+$today_stmt->execute();
+$today_result = $today_stmt->get_result();
+$today_reading = $today_result->fetch_assoc();
+
+$morning_liters = "";
+$morning_sales = "";
+
+// If today's reading exists, load morning readings
+if ($today_reading) {
+    $morning_liters = $today_reading['morning_liters'];
+    $morning_sales = $today_reading['morning_sales'];
+} else {
+    // Determine source of today's morning reading
+    if ($current_date == $batch_start_date) {
+        $start_stmt = $conn->prepare("SELECT morning_liters, morning_sales FROM fuel_readings WHERE pump_id = ? AND reading_date = ?");
+        $start_stmt->bind_param("is", $pump_id, $batch_start_date);
+        $start_stmt->execute();
+        $start_result = $start_stmt->get_result();
+        if ($start = $start_result->fetch_assoc()) {
+            $morning_liters = $start['morning_liters'];
+            $morning_sales = $start['morning_sales'];
         }
-
-        echo "<script>alert('Fuel reading recorded successfully.');</script>";
+    } else {
+        $prev_date = date('Y-m-d', strtotime('-1 day', strtotime($current_date)));
+        $prev_stmt = $conn->prepare("SELECT evening_liters, evening_sales FROM fuel_readings WHERE pump_id = ? AND reading_date = ?");
+        $prev_stmt->bind_param("is", $pump_id, $prev_date);
+        $prev_stmt->execute();
+        $prev_result = $prev_stmt->get_result();
+        if ($prev = $prev_result->fetch_assoc()) {
+            $morning_liters = $prev['evening_liters'];
+            $morning_sales = $prev['evening_sales'];
+        }
     }
 }
 
-// Fetch pumps for dropdown
-$pumps = $conn->query("SELECT id, pump_number, fuel_type FROM pumps");
+// Handle submission
+if (isset($_POST['submit_readings'])) {
+    $evening_liters = $_POST['evening_liters'];
+    $evening_sales = $_POST['evening_sales'];
+
+    if ($evening_liters < 0 || $evening_sales < 0) {
+        $_SESSION['error'] = "Values cannot be negative.";
+    } else {
+        if ($today_reading) {
+            $stmt = $conn->prepare("UPDATE fuel_readings SET evening_liters=?, evening_sales=?, updated_at=NOW() WHERE id=?");
+            $stmt->bind_param("ddi", $evening_liters, $evening_sales, $today_reading['id']);
+        } else {
+            $stmt = $conn->prepare("
+                INSERT INTO fuel_readings (pump_id, reading_date, morning_liters, morning_sales, evening_liters, evening_sales, user_email, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+            $stmt->bind_param("issdddd", $pump_id, $current_date, $morning_liters, $morning_sales, $evening_liters, $evening_sales, $user_email);
+        }
+
+        if ($stmt->execute()) {
+            $_SESSION['success'] = "Readings saved successfully.";
+        } else {
+            $_SESSION['error'] = "Failed to save readings.";
+        }
+    }
+    header("Location: fuel_readings.php");
+    exit();
+}
 ?>
 
 <div class="main-content">
-    <h2>Record Fuel Readings</h2>
+    <h2>Fuel Readings - <?= $batch['pump_number'] ?> (<?= $batch['fuel_type'] ?>)</h2>
 
-    <form method="post" style="max-width: 700px; margin: auto; background: #f9f9f9; padding: 20px; border-radius: 10px;">
-        <label>Pump:</label>
-        <select name="pump_id" required style="width: 100%; padding: 8px;">
-            <option value="">Select Pump</option>
-            <?php while ($pump = $pumps->fetch_assoc()): ?>
-                <option value="<?= $pump['id'] ?>">
-                    <?= htmlspecialchars($pump['pump_number'] . " - " . $pump['fuel_type']) ?>
-                </option>
-            <?php endwhile; ?>
-        </select><br><br>
-
-        <label>Reading Date:</label>
-        <input type="date" name="reading_date" value="<?= date('Y-m-d') ?>" required style="width: 100%; padding: 8px;"><br><br>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div>
-                <label>Morning Litres:</label>
-                <input type="number" name="morning_liters" step="0.01" min="0" required style="width: 100%; padding: 8px;">
-            </div>
-            <div>
-                <label>Evening Litres:</label>
-                <input type="number" name="evening_liters" step="0.01" min="0" required style="width: 100%; padding: 8px;">
-            </div>
-            <div>
-                <label>Morning Sales (KES):</label>
-                <input type="number" name="morning_sales" step="0.01" min="0" required style="width: 100%; padding: 8px;">
-            </div>
-            <div>
-                <label>Evening Sales (KES):</label>
-                <input type="number" name="evening_sales" step="0.01" min="0" required style="width: 100%; padding: 8px;">
-            </div>
+    <?php if ($low_fuel_alert): ?>
+        <div style="padding: 10px; background-color: yellow; color: red; font-weight: bold;">
+            ⚠️ Alert: Fuel is below 25%. Please notify admin.
         </div>
+    <?php endif; ?>
 
-        <br>
-        <button type="submit" style="padding: 10px 20px;">Submit Reading</button>
+    <?php if (isset($_SESSION['success'])): ?>
+        <div style="color: green;"><?= $_SESSION['success']; unset($_SESSION['success']); ?></div>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['error'])): ?>
+        <div style="color: red;"><?= $_SESSION['error']; unset($_SESSION['error']); ?></div>
+    <?php endif; ?>
+
+    <form method="POST">
+        <label>Reading Date:</label>
+        <input type="date" name="reading_date" value="<?= $current_date ?>" readonly>
+
+        <label>Morning Litres:</label>
+        <input type="number" step="0.01" name="morning_liters" value="<?= $morning_liters ?>" readonly>
+
+        <label>Morning Sales:</label>
+        <input type="number" step="0.01" name="morning_sales" value="<?= $morning_sales ?>" readonly>
+
+        <label>Evening Litres:</label>
+        <input type="number" step="0.01" name="evening_liters" required value="<?= $today_reading['evening_liters'] ?? '' ?>">
+
+        <label>Evening Sales:</label>
+        <input type="number" step="0.01" name="evening_sales" required value="<?= $today_reading['evening_sales'] ?? '' ?>">
+
+        <br><br>
+        <button type="submit" name="submit_readings">Save Readings</button>
     </form>
+
+    <hr>
+    <h3>📋 Reading History (Current Batch)</h3>
+    <table border="1" cellpadding="5" cellspacing="0">
+        <tr>
+            <th>Date</th>
+            <th>Morning Liters</th>
+            <th>Evening Liters</th>
+            <th>Liters Sold</th>
+            <th>Morning Sales</th>
+            <th>Evening Sales</th>
+            <th>Sales Made</th>
+        </tr>
+        <?php
+        $history_stmt = $conn->prepare("SELECT * FROM fuel_readings WHERE pump_id = ? ORDER BY reading_date DESC LIMIT 14");
+        $history_stmt->bind_param("i", $pump_id);
+        $history_stmt->execute();
+        $history_result = $history_stmt->get_result();
+
+        while ($row = $history_result->fetch_assoc()):
+            $liters_sold = $row['morning_liters'] - $row['evening_liters'];
+            $sales_made = $row['evening_sales'] - $row['morning_sales'];
+        ?>
+        <tr>
+            <td><?= $row['reading_date'] ?></td>
+            <td><?= $row['morning_liters'] ?></td>
+            <td><?= $row['evening_liters'] ?></td>
+            <td><?= $liters_sold ?></td>
+            <td><?= $row['morning_sales'] ?></td>
+            <td><?= $row['evening_sales'] ?></td>
+            <td><?= $sales_made ?></td>
+        </tr>
+        <?php endwhile; ?>
+    </table>
 </div>
 
 <?php include 'footer.php'; ?>
