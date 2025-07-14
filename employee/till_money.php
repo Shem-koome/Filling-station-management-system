@@ -109,7 +109,20 @@ while ($row = $result->fetch_assoc()) {
                     <td style="text-align: right;"><?php echo number_format($entry['transaction_cost'], 2); ?></td>
                     <td style="text-align: right;"><?php echo number_format($entry['total'], 2); ?></td>
                     <td><?php echo date('Y-m-d H:i:s', strtotime($entry['entry_date'])); ?></td>
-                    <td><a href="?delete_id=<?= $entry['id'] ?>" onclick="return confirm('Are you sure you want to delete this entry?');">Delete</a></td>
+                    <td>
+    <a href="?delete_id=<?= $entry['id'] ?>"
+       onclick="return confirm('Are you sure you want to delete this entry?');"
+       style="
+           background-color: #dc3545;
+           color: white;
+           padding: 5px 10px;
+           text-decoration: none;
+           border-radius: 4px;
+       ">
+       Delete
+    </a>
+</td>
+
                 </tr>
             <?php endforeach; ?>
         </tbody>
