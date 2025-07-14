@@ -19,7 +19,7 @@ if (!$batch_id) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['amount'], $_POST['transaction_cost']) && $batch_id) {
     $amount = floatval($_POST['amount']);
     $transaction_cost = floatval($_POST['transaction_cost']);
-    $total = $amount + $transaction_cost;
+    $total = $amount - $transaction_cost;
 
     if ($total > 0) {
         $stmt = $conn->prepare("INSERT INTO till_money (user_email, batch_id, amount, transaction_cost, total, entry_date) VALUES (?, ?, ?, ?, ?, NOW())");
@@ -31,6 +31,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['amount'], $_POST['tra
     } else {
         $_SESSION['error'] = "Please enter valid amount and transaction cost.";
     }
+}
+
+// Handle delete
+if (isset($_GET['delete_id'])) {
+    $delete_id = intval($_GET['delete_id']);
+    $del_stmt = $conn->prepare("DELETE FROM till_money WHERE id = ? AND user_email = ? AND batch_id = ?");
+    $del_stmt->bind_param("isi", $delete_id, $user_email, $batch_id);
+    $del_stmt->execute();
+
+    $_SESSION['success'] = "Till entry deleted successfully.";
+    header("Location: till_money.php");
+    exit();
 }
 
 // Pagination setup
@@ -47,7 +59,7 @@ $total_rows = $count_result->fetch_assoc()['total'];
 $total_pages = ceil($total_rows / $limit);
 
 // Fetch till entries
-$stmt = $conn->prepare("SELECT amount, transaction_cost, total, entry_date FROM till_money WHERE user_email = ? AND batch_id = ? ORDER BY entry_date DESC LIMIT ?, ?");
+$stmt = $conn->prepare("SELECT id, amount, transaction_cost, total, entry_date FROM till_money WHERE user_email = ? AND batch_id = ? ORDER BY entry_date DESC LIMIT ?, ?");
 $stmt->bind_param("siii", $user_email, $batch_id, $offset, $limit);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -87,6 +99,7 @@ while ($row = $result->fetch_assoc()) {
                 <th>Transaction Cost (KES)</th>
                 <th>Total (KES)</th>
                 <th>Date/Time</th>
+                <th>Action</th>
             </tr>
         </thead>
         <tbody>
@@ -96,6 +109,7 @@ while ($row = $result->fetch_assoc()) {
                     <td style="text-align: right;"><?php echo number_format($entry['transaction_cost'], 2); ?></td>
                     <td style="text-align: right;"><?php echo number_format($entry['total'], 2); ?></td>
                     <td><?php echo date('Y-m-d H:i:s', strtotime($entry['entry_date'])); ?></td>
+                    <td><a href="?delete_id=<?= $entry['id'] ?>" onclick="return confirm('Are you sure you want to delete this entry?');">Delete</a></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
