@@ -2,48 +2,46 @@
 include 'header.php';
 require '../authpage/db.php';
 
-// Add new spare
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_spare'])) {
-    $name = trim($_POST['spare_name']);
-    $unit_price = floatval($_POST['unit_price']);
-    $total_quantity = intval($_POST['total_quantity']);
+date_default_timezone_set('Africa/Nairobi');
 
-    if ($name && $unit_price > 0 && $total_quantity > 0) {
-        $stmt = $conn->prepare("INSERT INTO spares_admin (name, unit_price, total_quantity, sold_quantity) VALUES (?, ?, ?, 0)");
-        $stmt->bind_param("sdi", $name, $unit_price, $total_quantity);
-        $stmt->execute();
-        $_SESSION['success_spare'] = "Spare added successfully.";
-        header("Location: spares.php");
-        exit();
-    } else {
-        $_SESSION['error_spare'] = "Fill in all fields with valid values.";
-    }
-}
+// Get filter date or default to today
+$filter_date = isset($_GET['date']) ? $_GET['date'] : date('Y-m-d');
 
-// Restock spare
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['restock_spare'])) {
-    $spare_id = intval($_POST['restock_spare_id']);
-    $restock_qty = intval($_POST['restock_quantity']);
-
-    if ($restock_qty > 0) {
-        $stmt = $conn->prepare("UPDATE spares_admin SET total_quantity = total_quantity + ? WHERE id = ?");
-        $stmt->bind_param("ii", $restock_qty, $spare_id);
-        $stmt->execute();
-        $_SESSION['success_restock'] = "Spare restocked successfully.";
-        header("Location: spares.php");
-        exit();
-    } else {
-        $_SESSION['error_restock'] = "Enter a valid restock quantity.";
-    }
-}
-
-// Fetch all spares
+// Fetch spares
 $spares = $conn->query("SELECT * FROM spares_admin ORDER BY name ASC");
 
-// Fetch sold spares
-$sold_spares = $conn->query("SELECT ss.*, sa.name FROM spares_sold ss JOIN spares_admin sa ON ss.spare_id = sa.id ORDER BY ss.sale_date DESC");
-?>
+// Fetch sold spares filtered by date
+$sold_stmt = $conn->prepare("SELECT ss.*, sa.name 
+    FROM spares_sold ss 
+    JOIN spares_admin sa ON ss.spare_id = sa.id 
+    WHERE DATE(ss.sale_date) = ?
+    ORDER BY ss.sale_date DESC");
+$sold_stmt->bind_param("s", $filter_date);
+$sold_stmt->execute();
+$sold_spares = $sold_stmt->get_result();
 
+// Total for the selected day
+$day_total_stmt = $conn->prepare("SELECT SUM(total_price) as day_total 
+    FROM spares_sold WHERE DATE(sale_date) = ?");
+$day_total_stmt->bind_param("s", $filter_date);
+$day_total_stmt->execute();
+$day_total_result = $day_total_stmt->get_result();
+$day_total = $day_total_result->fetch_assoc()['day_total'] ?? 0;
+
+// Grand total all time
+$grand_total_result = $conn->query("SELECT SUM(total_price) as grand_total FROM spares_sold");
+$grand_total = $grand_total_result->fetch_assoc()['grand_total'] ?? 0;
+
+
+// Fetch manual spares (not filtered)
+$manual_spares = $conn->query("SELECT * FROM spares_employee ORDER BY entry_date DESC");
+$total_manual = 0;
+if ($manual_spares) {
+    foreach ($manual_spares as $ms) {
+        $total_manual += $ms['amount'];
+    }
+}
+?>
 <style>
 .container { padding: 20px; }
 .section { margin-bottom: 40px; padding: 20px; border: 1px solid #ccc; background: #f9f9f9; border-radius: 8px; }
@@ -134,11 +132,17 @@ input[type="number"] { width: 100px; }
                     <?php endforeach; ?>
                 </tbody>
             </table>
+            <div style="margin-top: 20px;">
+    <strong>Total for <?php echo $filter_date; ?>:</strong> KES <?php echo number_format($day_total, 2); ?><br>
+    <strong>Grand Total (All Time):</strong> KES <?php echo number_format($grand_total, 2); ?>
+</div>
         </div>
 
         <!-- Sold Spares -->
         <div class="section">
             <h3>Sold Spares</h3>
+            <label for="date_filter">Select Date:</label>
+            <input type="date" id="date_filter" value="<?php echo $filter_date; ?>">
 
             <table>
                 <thead>
@@ -160,60 +164,56 @@ input[type="number"] { width: 100px; }
                             </tr>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <tr><td colspan="4">No spares sold yet.</td></tr>
+                        <tr><td colspan="4">No spares sold on this date.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
         </div>
 
-        <!-- Manual Spares Entered by Employees -->
-<div class="section">
-    <h3>Manual Spares (Employee Input)</h3>
-
-    <?php
-    $manual_spares = $conn->query("SELECT * FROM spares_employee ORDER BY entry_date DESC");
-    $total_manual = 0;
-    if ($manual_spares) {
-        foreach ($manual_spares as $ms) {
-            $total_manual += $ms['amount'];
-        }
-    }
-    ?>
-
-    <table>
-        <thead>
-            <tr>
-                <th>Spare Name</th>
-                <th>Amount (KES)</th>
-                <th>Entry Date</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php if ($manual_spares && $manual_spares->num_rows > 0): ?>
-                <?php foreach ($manual_spares as $ms): ?>
+        <!-- Manual Spares -->
+        <div class="section">
+            <h3>Manual Spares (Employee Input)</h3>
+            <table>
+                <thead>
                     <tr>
-                        <td><?php echo htmlspecialchars($ms['name']); ?></td>
-                        <td style="text-align:right;"><?php echo number_format($ms['amount'], 2); ?></td>
-                        <td><?php echo date('Y-m-d H:i', strtotime($ms['entry_date'])); ?></td>
+                        <th>Spare Name</th>
+                        <th>Amount (KES)</th>
+                        <th>Entry Date</th>
                     </tr>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <tr><td colspan="3">No manual spares entered by employees.</td></tr>
-            <?php endif; ?>
-        </tbody>
-        <tfoot>
-            <tr class="success">
-                <td><strong>Total</strong></td>
-                <td style="text-align:right;"><strong><?php echo number_format($total_manual, 2); ?></strong></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
-</div>
-
+                </thead>
+                <tbody>
+                    <?php if ($manual_spares && $manual_spares->num_rows > 0): ?>
+                        <?php foreach ($manual_spares as $ms): ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars($ms['name']); ?></td>
+                                <td style="text-align:right;"><?php echo number_format($ms['amount'], 2); ?></td>
+                                <td><?php echo date('Y-m-d H:i', strtotime($ms['entry_date'])); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr><td colspan="3">No manual spares entered by employees.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+                <tfoot>
+                    <tr class="success">
+                        <td><strong>Total</strong></td>
+                        <td style="text-align:right;"><strong><?php echo number_format($total_manual, 2); ?></strong></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
 
     </div>
 </div>
 
+<script>
+document.getElementById('date_filter').addEventListener('change', function() {
+    const selectedDate = this.value;
+    if (selectedDate) {
+        window.location.href = '?date=' + selectedDate;
+    }
+});
+</script>
 
 <?php include 'footer.php'; ?>

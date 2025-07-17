@@ -1,10 +1,11 @@
 <?php include 'header.php'; ?>
 <?php
 require '../authpage/db.php';
+date_default_timezone_set('Africa/Nairobi');
 
-// Fetch deposits with batch and pump info
+// Fetch all deposits
 $result = $conn->query("
-    SELECT cd.user_email, cd.amount, cd.deposit_date, 
+    SELECT cd.user_email, cd.fuel, cd.spares, cd.cash_at_hand, cd.bank, cd.deposit_date, 
            fb.id AS batch_id, p.pump_number
     FROM cash_deposits cd
     LEFT JOIN fuel_batches fb ON cd.batch_id = fb.id
@@ -13,11 +14,14 @@ $result = $conn->query("
 ");
 
 $deposits = [];
-$total_amount = 0;
+$total_fuel = $total_spares = $total_cash_at_hand = $total_bank = 0;
 
 while ($row = $result->fetch_assoc()) {
     $deposits[] = $row;
-    $total_amount += floatval($row['amount']);
+    $total_fuel += floatval($row['fuel']);
+    $total_spares += floatval($row['spares']);
+    $total_cash_at_hand += floatval($row['cash_at_hand']);
+    $total_bank += floatval($row['bank']);
 }
 ?>
 
@@ -28,10 +32,13 @@ while ($row = $result->fetch_assoc()) {
         <thead style="background-color: #f2f2f2;">
             <tr>
                 <th>Date/Time</th>
-                <th>Employee Email</th>
+                <th>Employee</th>
                 <th>Pump</th>
                 <th>Batch ID</th>
-                <th>Amount Deposited (KES)</th>
+                <th>Fuel</th>
+                <th>Spares</th>
+                <th>Cash At Hand</th>
+                <th>Bank</th>
             </tr>
         </thead>
         <tbody>
@@ -42,19 +49,25 @@ while ($row = $result->fetch_assoc()) {
                         <td><?= htmlspecialchars($deposit['user_email']); ?></td>
                         <td><?= $deposit['pump_number'] ?? 'N/A'; ?></td>
                         <td><?= $deposit['batch_id'] ?? 'N/A'; ?></td>
-                        <td style="text-align: right;"><?= number_format($deposit['amount'], 2); ?></td>
+                        <td style="text-align: right;"><?= number_format($deposit['fuel'], 2); ?></td>
+                        <td style="text-align: right;"><?= number_format($deposit['spares'], 2); ?></td>
+                        <td style="text-align: right;"><?= number_format($deposit['cash_at_hand'], 2); ?></td>
+                        <td style="text-align: right;"><?= number_format($deposit['bank'], 2); ?></td>
                     </tr>
                 <?php endforeach; ?>
             <?php else: ?>
                 <tr>
-                    <td colspan="5" style="text-align: center;">No deposits recorded yet.</td>
+                    <td colspan="8" style="text-align: center;">No deposits recorded yet.</td>
                 </tr>
             <?php endif; ?>
         </tbody>
         <tfoot>
             <tr style="font-weight: bold; background-color: #dff0d8;">
-                <td colspan="4">Total Deposited</td>
-                <td style="text-align: right;">KES <?= number_format($total_amount, 2); ?></td>
+                <td colspan="4" style="text-align: right;">TOTALS:</td>
+                <td style="text-align: right;">KES <?= number_format($total_fuel, 2); ?></td>
+                <td style="text-align: right;">KES <?= number_format($total_spares, 2); ?></td>
+                <td style="text-align: right;">KES <?= number_format($total_cash_at_hand, 2); ?></td>
+                <td style="text-align: right;">KES <?= number_format($total_bank, 2); ?></td>
             </tr>
         </tfoot>
     </table>

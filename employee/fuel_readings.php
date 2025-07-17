@@ -1,6 +1,7 @@
 <?php
 include 'header.php';
 require '../authpage/db.php';
+
 if (!isset($_SESSION['email'])) {
     header("Location: ../authpage/login.php");
     exit();
@@ -55,12 +56,11 @@ $today_reading = $today_result->fetch_assoc();
 $morning_liters = "";
 $morning_sales = "";
 
-// If today's reading exists, load morning readings
+// Determine morning readings
 if ($today_reading) {
     $morning_liters = $today_reading['morning_liters'];
     $morning_sales = $today_reading['morning_sales'];
 } else {
-    // Determine source of today's morning reading
     if ($current_date == $batch_start_date) {
         $start_stmt = $conn->prepare("SELECT morning_liters, morning_sales FROM fuel_readings WHERE pump_id = ? AND reading_date = ?");
         $start_stmt->bind_param("is", $pump_id, $batch_start_date);
@@ -85,8 +85,8 @@ if ($today_reading) {
 
 // Handle submission
 if (isset($_POST['submit_readings'])) {
-    $evening_liters = $_POST['evening_liters'];
-    $evening_sales = $_POST['evening_sales'];
+    $evening_liters = floatval($_POST['evening_liters']);
+    $evening_sales = floatval($_POST['evening_sales']);
 
     if ($evening_liters < 0 || $evening_sales < 0) {
         $_SESSION['error'] = "Values cannot be negative.";
@@ -96,7 +96,8 @@ if (isset($_POST['submit_readings'])) {
             $stmt->bind_param("ddi", $evening_liters, $evening_sales, $today_reading['id']);
         } else {
             $stmt = $conn->prepare("
-                INSERT INTO fuel_readings (pump_id, reading_date, morning_liters, morning_sales, evening_liters, evening_sales, user_email, updated_at)
+                INSERT INTO fuel_readings 
+                (pump_id, reading_date, morning_liters, morning_sales, evening_liters, evening_sales, user_email, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
             ");
             $stmt->bind_param("issdddd", $pump_id, $current_date, $morning_liters, $morning_sales, $evening_liters, $evening_sales, $user_email);
@@ -104,6 +105,17 @@ if (isset($_POST['submit_readings'])) {
 
         if ($stmt->execute()) {
             $_SESSION['success'] = "Readings saved successfully.";
+
+            // INSERT into cash_deposits
+            $sales_made = $evening_sales - $morning_sales;
+            if ($sales_made < 0) $sales_made = 0;
+
+            $cd_stmt = $conn->prepare("
+                INSERT INTO cash_deposits (pump_id, batch_id, user_email, fuel, deposit_date)
+                VALUES (?, ?, ?, ?, NOW())
+            ");
+            $cd_stmt->bind_param("iisd", $pump_id, $batch['id'], $user_email, $sales_made);
+            $cd_stmt->execute();
         } else {
             $_SESSION['error'] = "Failed to save readings.";
         }
@@ -114,7 +126,7 @@ if (isset($_POST['submit_readings'])) {
 ?>
 
 <div class="main-content">
-    <h2>Fuel Readings - <?= $batch['pump_number'] ?> (<?= $batch['fuel_type'] ?>)</h2>
+    <h2>Fuel Readings - <?= htmlspecialchars($batch['pump_number']) ?> (<?= htmlspecialchars($batch['fuel_type']) ?>)</h2>
 
     <?php if ($low_fuel_alert): ?>
         <div style="padding: 10px; background-color: yellow; color: red; font-weight: bold;">
@@ -134,10 +146,10 @@ if (isset($_POST['submit_readings'])) {
         <input type="date" name="reading_date" value="<?= $current_date ?>" readonly>
 
         <label>Morning Litres:</label>
-        <input type="number" step="0.01" name="morning_liters" value="<?= $morning_liters ?>" readonly>
+        <input type="number" step="0.01" name="morning_liters" value="<?= htmlspecialchars($morning_liters) ?>" readonly>
 
         <label>Morning Sales:</label>
-        <input type="number" step="0.01" name="morning_sales" value="<?= $morning_sales ?>" readonly>
+        <input type="number" step="0.01" name="morning_sales" value="<?= htmlspecialchars($morning_sales) ?>" readonly>
 
         <label>Evening Litres:</label>
         <input type="number" step="0.01" name="evening_liters" required value="<?= $today_reading['evening_liters'] ?? '' ?>">
@@ -168,17 +180,17 @@ if (isset($_POST['submit_readings'])) {
         $history_result = $history_stmt->get_result();
 
         while ($row = $history_result->fetch_assoc()):
-            $liters_sold = $row['morning_liters'] - $row['evening_liters'];
+            $liters_sold = $row['evening_liters'] - $row['morning_liters'];
             $sales_made = $row['evening_sales'] - $row['morning_sales'];
         ?>
         <tr>
-            <td><?= $row['reading_date'] ?></td>
-            <td><?= $row['morning_liters'] ?></td>
-            <td><?= $row['evening_liters'] ?></td>
-            <td><?= $liters_sold ?></td>
-            <td><?= $row['morning_sales'] ?></td>
-            <td><?= $row['evening_sales'] ?></td>
-            <td><?= $sales_made ?></td>
+            <td><?= htmlspecialchars($row['reading_date']) ?></td>
+            <td><?= htmlspecialchars($row['morning_liters']) ?></td>
+            <td><?= htmlspecialchars($row['evening_liters']) ?></td>
+            <td><?= htmlspecialchars($liters_sold) ?></td>
+            <td><?= htmlspecialchars($row['morning_sales']) ?></td>
+            <td><?= htmlspecialchars($row['evening_sales']) ?></td>
+            <td><?= htmlspecialchars($sales_made) ?></td>
         </tr>
         <?php endwhile; ?>
     </table>
